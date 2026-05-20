@@ -72,7 +72,8 @@ def find_file(video_id: str, ext: str) -> Optional[Path]:
 # ─── yt-dlp Options ────────────────────────────────────────────────────────────
 def get_ydl_opts_audio(video_id: str) -> dict:
     opts = {
-        "format": "bestaudio/best",
+        # Fixed: Fallback formats (bestaudio/best/ba/b) taaki format unavailable error na aaye
+        "format": "bestaudio/best/ba/b",
         "outtmpl": str(DOWNLOAD_DIR / f"{video_id}.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
@@ -84,14 +85,14 @@ def get_ydl_opts_audio(video_id: str) -> dict:
         }],
         "socket_timeout": 30,
     }
-    # Agar server par cookies file maujood hai toh add karo
     if os.path.exists(COOKIES_FILE):
         opts["cookiefile"] = COOKIES_FILE
     return opts
 
 def get_ydl_opts_video(video_id: str) -> dict:
     opts = {
-        "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+        # Fixed: Flexible video formats selection (720p fallback ke saath)
+        "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best/bestvideo+bestaudio/best",
         "outtmpl": str(DOWNLOAD_DIR / f"{video_id}.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
@@ -147,7 +148,7 @@ async def get_live_url(video_id: str) -> str:
     opts = {
         "quiet": True,
         "no_warnings": True,
-        "format": "best",
+        "format": "best/bestvideo+bestaudio",
         "socket_timeout": 15,
     }
     if os.path.exists(COOKIES_FILE):
