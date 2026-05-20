@@ -21,22 +21,25 @@ COOKIES_FILE = "cookies.txt"
 # Global lock dict to prevent duplicate parallel downloads for same video
 download_locks = {}
 
+# ─── Helper function to safely recreate cookies on the fly ─────────────────────
+def ensure_cookies():
+    """Checks if cookies file exists, if not, recreates it from env variable."""
+    cookies_content = os.getenv("YT_COOKIES")
+    if cookies_content and not os.path.exists(COOKIES_FILE):
+        try:
+            with open(COOKIES_FILE, "w", encoding="utf-8") as f:
+                f.write(cookies_content)
+            print("⚡ Dynamic Check: Cookies file successfully recreated on the fly!")
+        except Exception as e:
+            print(f"❌ Dynamic Check Failed to create cookies file: {str(e)}")
+
 # ─── Startup ───────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     DOWNLOAD_DIR.mkdir(exist_ok=True)
     
-    # Render Environment Variable se cookies check aur create karne ka jugaad
-    cookies_content = os.getenv("YT_COOKIES")
-    if cookies_content:
-        try:
-            with open(COOKIES_FILE, "w", encoding="utf-8") as f:
-                f.write(cookies_content)
-            print("✅ Cookies file successfully created from Environment Variable!")
-        except Exception as e:
-            print(f"❌ Failed to create cookies file: {str(e)}")
-    else:
-        print("⚠️ No YT_COOKIES found in environment variables. Running without cookies.")
+    # Initial startup check
+    ensure_cookies()
 
     cleanup_task = asyncio.create_task(cleanup_loop())
     yield
@@ -71,8 +74,8 @@ def find_file(video_id: str, ext: str) -> Optional[Path]:
 
 # ─── yt-dlp Options ────────────────────────────────────────────────────────────
 def get_ydl_opts_audio(video_id: str) -> dict:
+    ensure_cookies()  # Safety check right before setting options
     opts = {
-        # Fixed: Fallback formats (bestaudio/best/ba/b) taaki format unavailable error na aaye
         "format": "bestaudio/best/ba/b",
         "outtmpl": str(DOWNLOAD_DIR / f"{video_id}.%(ext)s"),
         "quiet": True,
@@ -90,8 +93,8 @@ def get_ydl_opts_audio(video_id: str) -> dict:
     return opts
 
 def get_ydl_opts_video(video_id: str) -> dict:
+    ensure_cookies()  # Safety check right before setting options
     opts = {
-        # Fixed: Flexible video formats selection (720p fallback ke saath)
         "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best/bestvideo+bestaudio/best",
         "outtmpl": str(DOWNLOAD_DIR / f"{video_id}.%(ext)s"),
         "quiet": True,
@@ -144,6 +147,7 @@ async def download_yt(video_id: str, file_type: str) -> Path:
         return result
 
 async def get_live_url(video_id: str) -> str:
+    ensure_cookies()  # Safety check for live stream extraction
     url = f"https://www.youtube.com/watch?v={video_id}"
     opts = {
         "quiet": True,
@@ -195,6 +199,7 @@ async def download(
     api_key: Optional[str] = Query(None),
 ):
     check_auth(request, api_key)
+    ensure_cookies()  # Safety check inside route handler
 
     if type not in ("audio", "video"):
         raise HTTPException(status_code=400, detail="type must be 'audio' or 'video'")
@@ -217,6 +222,7 @@ async def live(
     api_key: Optional[str] = Query(None),
 ):
     check_auth(request, api_key)
+    ensure_cookies()  # Safety check inside route handler
 
     video_id = extract_video_id(url)
     stream_url = await get_live_url(video_id)
